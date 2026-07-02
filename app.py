@@ -102,6 +102,71 @@ def count_stats():
         c_quem    = conn.execute("SELECT COUNT(*) FROM tuss_exames WHERE quem_faz != '' AND quem_faz IS NOT NULL").fetchone()[0]
     return total, c_preparo, c_quem
 
+# ── Modal de edição (st.dialog) ──────────────────────────────────────────────
+
+@st.dialog("Editar procedimento", width="large")
+def abrir_dialogo_edicao(row):
+    """Modal para editar 'Quem faz', 'Tem preparo' e 'Observações' de um procedimento."""
+    codigo    = row["codigo"]
+    nome_proc = row["nome"]
+
+    atuais_str = row["quem_faz"] or ""
+    atuais     = [r.strip() for r in atuais_str.split(",") if r.strip()]
+
+    st.caption(f"Código TUSS: **{codigo}**")
+    st.markdown(f"#### {nome_proc}")
+
+    responsaveis = get_responsaveis()
+
+    col_quem, col_prep = st.columns([3, 1])
+
+    with col_quem:
+        if not responsaveis:
+            st.warning("Cadastre responsáveis no menu lateral antes de atribuí-los.")
+            selecionados = atuais
+        else:
+            selecionados = st.multiselect(
+                ":material/person: Quem faz",
+                options=responsaveis,
+                default=[r for r in atuais if r in responsaveis],
+                placeholder="Selecione um ou mais responsáveis...",
+                key=f"multi_quem_{codigo}",
+            )
+
+    with col_prep:
+        tem_preparo = st.checkbox(
+            ":material/error: Tem preparo?",
+            value=bool(row["tem_preparo"]),
+            key=f"chk_prep_{codigo}",
+        )
+
+    observacoes_texto = st.text_area(
+        ":material/edit_note: Observações",
+        value=row["observacoes"] or "",
+        placeholder="Anotações sobre este exame...",
+        key=f"obs_{codigo}",
+        height=100,
+    )
+
+    col_ap, col_lp, col_fe = st.columns(3)
+    with col_ap:
+        if st.button("Salvar", type="primary", use_container_width=True, key="btn_aplicar_dialog"):
+            save_quem_faz(codigo, selecionados)
+            save_observacoes(codigo, observacoes_texto)
+            with get_conn() as conn:
+                conn.execute("UPDATE tuss_exames SET tem_preparo=? WHERE codigo=?",
+                             (int(tem_preparo), codigo))
+                conn.commit()
+            st.toast("Alterações salvas!", icon=":material/check:")
+            st.rerun()
+    with col_lp:
+        if st.button("Limpar quem faz", use_container_width=True, key="btn_limpar_dialog"):
+            save_quem_faz(codigo, [])
+            st.rerun()
+    with col_fe:
+        if st.button("Fechar", use_container_width=True, key="btn_fechar_dialog"):
+            st.rerun()
+
 # ── Inicialização ───────────────────────────────────────────────────────────
 init_responsaveis()
 init_observacoes_column()
@@ -206,10 +271,14 @@ event = st.dataframe(
 
 st.divider()
 
-# ── Painel de edição ──────────────────────────────────────────────────────────
+# ── Painel de edição (abre modal via st.dialog) ──────────────────────────────
+if "dialog_last_codigo" not in st.session_state:
+    st.session_state.dialog_last_codigo = None
+
 selection = event.selection.rows if event and event.selection else []
 
 if not selection:
+    st.session_state.dialog_last_codigo = None
     st.info("Selecione uma linha na tabela para editar o procedimento.", icon=":material/info:")
 else:
     idx       = selection[0]
@@ -217,53 +286,19 @@ else:
     codigo    = row["codigo"]
     nome_proc = row["nome"]
 
-    atuais_str = row["quem_faz"] or ""
-    atuais     = [r.strip() for r in atuais_str.split(",") if r.strip()]
-
-    st.header(f":material/edit: Editando - {nome_proc} ({codigo})")
-
-    col_quem, col_prep = st.columns([3, 1])
-
-    with col_quem:
-        if not responsaveis:
-            st.warning("Cadastre responsáveis no menu lateral antes de atribuí-los.")
-            selecionados = atuais
-        else:
-            selecionados = st.multiselect(
-                ":material/person: Quem faz",
-                options=responsaveis,
-                default=[r for r in atuais if r in responsaveis],
-                placeholder="Selecione um ou mais responsáveis...",
-                key=f"multi_quem_{codigo}",
-            )
-
-    with col_prep:
-        tem_preparo = st.checkbox(
-            ":material/error: Tem preparo?",
-            value=bool(row["tem_preparo"]),
-            key=f"chk_prep_{codigo}",
+    col_info, col_btn = st.columns([4, 1])
+    with col_info:
+        st.success(f"Selecionado: **{nome_proc}** ({codigo})", icon=":material/check_circle:")
+    with col_btn:
+        reabrir = st.button(
+            "Editar",
+            icon=":material/edit:",
+            use_container_width=True,
+            key="btn_reabrir_dialog",
         )
 
-    observacoes_texto = st.text_area(
-        ":material/edit_note: Observações",
-        value=row["observacoes"] or "",
-        placeholder="Anotações sobre este exame...",
-        key=f"obs_{codigo}",
-        height=100,
-    )
-
-    col_ap, col_lp, _ = st.columns([1, 1, 4])
-    with col_ap:
-        if st.button("Salvar", type="primary", use_container_width=True, key="btn_aplicar"):
-            save_quem_faz(codigo, selecionados)
-            save_observacoes(codigo, observacoes_texto)
-            with get_conn() as conn:
-                conn.execute("UPDATE tuss_exames SET tem_preparo=? WHERE codigo=?",
-                             (int(tem_preparo), codigo))
-                conn.commit()
-            st.success("Alterações salvas!", icon=":material/check:")
-            st.rerun()
-    with col_lp:
-        if st.button("Limpar quem faz", use_container_width=True, key="btn_limpar"):
-            save_quem_faz(codigo, [])
-            st.rerun()
+    # Abre o modal automaticamente ao selecionar uma nova linha, ou quando o
+    # botão "Editar" é clicado (ex.: reabrir após fechar/dispensar o modal).
+    if reabrir or codigo != st.session_state.dialog_last_codigo:
+        st.session_state.dialog_last_codigo = codigo
+        abrir_dialogo_edicao(row)
