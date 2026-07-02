@@ -23,6 +23,14 @@ def init_responsaveis():
         """)
         conn.commit()
 
+def init_observacoes_column():
+    """Garante que a coluna 'observacoes' exista na tabela tuss_exames."""
+    with get_conn() as conn:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(tuss_exames)").fetchall()]
+        if "observacoes" not in cols:
+            conn.execute("ALTER TABLE tuss_exames ADD COLUMN observacoes TEXT DEFAULT ''")
+            conn.commit()
+
 def get_responsaveis() -> list[str]:
     with get_conn() as conn:
         rows = conn.execute("SELECT nome FROM responsaveis ORDER BY nome").fetchall()
@@ -46,7 +54,7 @@ def remove_responsavel(nome: str):
         conn.commit()
 
 def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None):
-    query = "SELECT codigo, nome, quem_faz, tem_preparo FROM tuss_exames WHERE 1=1"
+    query = "SELECT codigo, nome, quem_faz, tem_preparo, observacoes FROM tuss_exames WHERE 1=1"
     params = []
     if search:
         query += " AND (codigo LIKE ? OR nome LIKE ?)"
@@ -64,6 +72,7 @@ def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None):
     with get_conn() as conn:
         df = pd.read_sql_query(query, conn, params=params)
     df["tem_preparo"] = df["tem_preparo"].astype(bool)
+    df["observacoes"] = df["observacoes"].fillna("")
     return df
 
 
@@ -77,6 +86,15 @@ def save_quem_faz(codigo: str, responsaveis_selecionados: list[str]):
         )
         conn.commit()
 
+def save_observacoes(codigo: str, texto: str):
+    """Salva o texto de observações de um procedimento."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tuss_exames SET observacoes=? WHERE codigo=?",
+            (texto, codigo),
+        )
+        conn.commit()
+
 def count_stats():
     with get_conn() as conn:
         total     = conn.execute("SELECT COUNT(*) FROM tuss_exames").fetchone()[0]
@@ -86,6 +104,7 @@ def count_stats():
 
 # ── Inicialização ───────────────────────────────────────────────────────────
 init_responsaveis()
+init_observacoes_column()
 
 # ── Header ──────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -180,6 +199,7 @@ event = st.dataframe(
         "nome":        st.column_config.TextColumn("Nome do Procedimento", width="large"),
         "quem_faz":    st.column_config.TextColumn("Quem faz",         width="medium"),
         "tem_preparo": st.column_config.TextColumn("Tem preparo?",      width="small"),
+        "observacoes": st.column_config.TextColumn("Observações",      width="large"),
     },
     key="tuss_table",
 )
@@ -200,12 +220,7 @@ else:
     atuais_str = row["quem_faz"] or ""
     atuais     = [r.strip() for r in atuais_str.split(",") if r.strip()]
 
-    st.markdown(f"""
-    <div class="edit-panel">
-      <h4>✏️ Editando — <span style="font-weight:400">{nome_proc}</span>
-      <span style="font-size:.8rem; color:#64748b; margin-left:.5rem;">#{codigo}</span></h4>
-    </div>
-    """, unsafe_allow_html=True)
+    st.header(f":material/edit: Editando - {nome_proc} ({codigo})")
 
     col_quem, col_prep = st.columns([3, 1])
 
@@ -229,10 +244,19 @@ else:
             key=f"chk_prep_{codigo}",
         )
 
+    observacoes_texto = st.text_area(
+        ":material/edit_note: Observações",
+        value=row["observacoes"] or "",
+        placeholder="Anotações sobre este exame...",
+        key=f"obs_{codigo}",
+        height=100,
+    )
+
     col_ap, col_lp, _ = st.columns([1, 1, 4])
     with col_ap:
         if st.button("Salvar", type="primary", use_container_width=True, key="btn_aplicar"):
             save_quem_faz(codigo, selecionados)
+            save_observacoes(codigo, observacoes_texto)
             with get_conn() as conn:
                 conn.execute("UPDATE tuss_exames SET tem_preparo=? WHERE codigo=?",
                              (int(tem_preparo), codigo))
