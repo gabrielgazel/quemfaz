@@ -1,6 +1,6 @@
 import streamlit as st
 
-from db import init_responsaveis, init_observacoes_column, init_avisos
+from db import init_responsaveis, init_observacoes_column, init_avisos, init_medicos
 
 st.set_page_config(page_title="Tabela TUSS", page_icon=":material/table_rows:", layout="wide")
 
@@ -8,6 +8,7 @@ st.set_page_config(page_title="Tabela TUSS", page_icon=":material/table_rows:", 
 init_responsaveis()
 init_observacoes_column()
 init_avisos()
+init_medicos()
 
 # ── Navegação ─────────────────────────────────────────────────────────────────
 inicio = st.Page(
@@ -23,6 +24,12 @@ consulta = st.Page(
     icon=":material/table_rows:",
     url_path="consulta",
 )
+medicos = st.Page(
+    "pages/medicos.py",
+    title="Médicos",
+    icon=":material/stethoscope:",
+    url_path="medicos",
+)
 responsaveis = st.Page(
     "pages/responsaveis.py",
     title="Responsáveis",
@@ -30,5 +37,5 @@ responsaveis = st.Page(
     url_path="responsaveis",
 )
 
-pg = st.navigation([inicio, consulta, responsaveis], position="top")
+pg = st.navigation([inicio, consulta, medicos, responsaveis], position="top")
 pg.run()

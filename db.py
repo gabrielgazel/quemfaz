@@ -156,3 +156,83 @@ def remove_aviso(aviso_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM avisos WHERE id=?", (aviso_id,))
         conn.commit()
+
+# ── Médicos ──────────────────────────────────────────────────────────────────
+
+def init_medicos():
+    """Cria a tabela de médicos, se ainda não existir."""
+    with get_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS medicos (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome               TEXT NOT NULL,
+                local_atendimento  TEXT,
+                horario            TEXT,
+                ordem_atendimento  TEXT NOT NULL DEFAULT 'Ordem de chegada',
+                idade_minima       INTEGER NOT NULL DEFAULT 0,
+                exames_por_dia     INTEGER,
+                observacoes        TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+
+def get_medicos() -> list[dict]:
+    """Retorna todos os médicos cadastrados, ordenados por nome."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT id, nome, local_atendimento, horario, ordem_atendimento,
+                   idade_minima, exames_por_dia, observacoes
+            FROM medicos
+            ORDER BY nome
+        """).fetchall()
+    return [
+        {
+            "id": r[0],
+            "nome": r[1],
+            "local_atendimento": r[2] or "",
+            "horario": r[3] or "",
+            "ordem_atendimento": r[4],
+            "idade_minima": r[5],
+            "exames_por_dia": r[6],
+            "observacoes": r[7] or "",
+        }
+        for r in rows
+    ]
+
+def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendimento: str,
+               idade_minima: int, exames_por_dia: int | None, observacoes: str = ""):
+    nome = nome.strip()
+    if not nome:
+        return False, "Nome não pode ser vazio."
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO medicos
+                (nome, local_atendimento, horario, ordem_atendimento,
+                 idade_minima, exames_por_dia, observacoes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (nome, local_atendimento.strip(), horario.strip(), ordem_atendimento,
+              idade_minima, exames_por_dia, observacoes.strip()))
+        conn.commit()
+    return True, f'Dr(a). "{nome}" cadastrado(a).'
+
+def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: str,
+                   ordem_atendimento: str, idade_minima: int,
+                   exames_por_dia: int | None, observacoes: str = ""):
+    nome = nome.strip()
+    if not nome:
+        return False, "Nome não pode ser vazio."
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE medicos
+            SET nome=?, local_atendimento=?, horario=?, ordem_atendimento=?,
+                idade_minima=?, exames_por_dia=?, observacoes=?
+            WHERE id=?
+        """, (nome, local_atendimento.strip(), horario.strip(), ordem_atendimento,
+              idade_minima, exames_por_dia, observacoes.strip(), medico_id))
+        conn.commit()
+    return True, "Dados atualizados."
+
+def remove_medico(medico_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM medicos WHERE id=?", (medico_id,))
+        conn.commit()
