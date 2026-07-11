@@ -1,6 +1,6 @@
 import streamlit as st
 
-from db import get_responsaveis, fetch_all
+from db import get_nomes_medicos, fetch_all
 
 # ── Header ──────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -20,20 +20,20 @@ with st.sidebar:
     search      = st.text_input("Nome ou Código TUSS", placeholder="Ex: Ressonância, 41101227...")
     filtro_prep = st.selectbox("Preparo", ["Todos", "Com preparo", "Sem preparo"])
 
-    responsaveis = get_responsaveis()
+    nomes_medicos = get_nomes_medicos()
 
     st.markdown("**Quem faz**")
-    if responsaveis:
+    if nomes_medicos:
         filtro_quem = st.multiselect(
             "Quem faz",
-            options=responsaveis,
+            options=nomes_medicos,
             default=[],
-            placeholder="Todos os responsáveis",
+            placeholder="Todos os médicos",
             label_visibility="collapsed",
         )
     else:
-        st.caption("Nenhum responsável cadastrado ainda.")
-        st.page_link("pages/responsaveis.py", label="Cadastrar responsáveis", icon=":material/person_add:")
+        st.caption("Nenhum médico cadastrado ainda.")
+        st.page_link("pages/medicos.py", label="Cadastrar médicos", icon=":material/person_add:")
         filtro_quem = []
 
 # ── Só busca/exibe algo se algum filtro foi de fato aplicado ────────────────
@@ -42,7 +42,7 @@ algum_filtro_aplicado = bool(search) or filtro_prep != "Todos" or bool(filtro_qu
 if not algum_filtro_aplicado:
     st.info(
         "Use os filtros na barra lateral para pesquisar por nome, código TUSS, "
-        "preparo ou responsável.",
+        "preparo ou médico responsável.",
         icon=":material/search:",
     )
     st.stop()
@@ -79,7 +79,7 @@ for _, row in df.iterrows():
         if quem_faz:
             st.markdown(":material/person: **Quem faz:** " + ", ".join(quem_faz))
         else:
-            st.caption(":material/person_off: Nenhum responsável definido")
+            st.caption(":material/person_off: Nenhum médico definido")
 
         if row["observacoes"]:
             st.markdown(f":material/edit_note: **Observações:** {row['observacoes']}")
