@@ -1,13 +1,14 @@
 # QuemFaz
 
-Aplicação Streamlit para gestão de códigos de procedimentos TUSS, permitindo definir responsáveis, indicar necessidade de preparo e registrar observações para cada procedimento.
+Aplicação Streamlit para gestão de códigos de procedimentos TUSS, permitindo indicar qual médico realiza cada exame, necessidade de preparo e observações.
 
 Base de dados filtrada para códigos TUSS iniciados em `4090`, `4100` e `4110` (~210 registros).
 
 ## Funcionalidades
 
-- **Consulta**: tabela com todos os procedimentos, edição via modal
-- **Responsáveis**: gestão dos responsáveis, usados como seleção (multiselect) na edição
+- **Início**: mural de avisos e comunicados
+- **Consulta**: tabela com todos os procedimentos, filtro por nome/código, preparo e médico responsável ("Quem faz")
+- **Médicos**: cadastro dos médicos (local e horário de atendimento, ordem de atendimento, idade mínima, limite de exames/dia). Os nomes cadastrados aqui alimentam o filtro "Quem faz" da página Consulta
 - Persistência em SQLite
 
 ## Estrutura
@@ -17,8 +18,9 @@ quemfaz/
 ├── app.py                  # Entrypoint (st.navigation)
 ├── db.py                   # Acesso e migração do banco
 ├── pages/
-│   ├── consulta.py         # Tabela principal + edição
-│   └── responsaveis.py     # Gestão de responsáveis
+│   ├── inicio.py           # Mural de avisos
+│   ├── consulta.py         # Tabela principal + filtros
+│   └── medicos.py          # Cadastro de médicos (fonte do filtro "Quem faz")
 ├── tuss.db                 # Banco SQLite
 ├── .streamlit/config.toml  # Tema
 ├── pyproject.toml / uv.lock
