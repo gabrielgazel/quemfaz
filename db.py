@@ -65,9 +65,9 @@ def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None):
     return df
 
 
-def save_quem_faz(codigo: str, responsaveis_selecionados: list[str]):
-    """Salva a lista de responsáveis de um procedimento (separados por vírgula)."""
-    valor = ", ".join(responsaveis_selecionados)
+def save_quem_faz(codigo: str, medicos_selecionados: list[str]):
+    """Salva a lista de médicos responsáveis por um procedimento (separados por vírgula)."""
+    valor = ", ".join(medicos_selecionados)
     with get_conn() as conn:
         conn.execute(
             "UPDATE tuss_exames SET quem_faz=? WHERE codigo=?",
@@ -81,6 +81,15 @@ def save_observacoes(codigo: str, texto: str):
         conn.execute(
             "UPDATE tuss_exames SET observacoes=? WHERE codigo=?",
             (texto, codigo),
+        )
+        conn.commit()
+
+def save_tem_preparo(codigo: str, tem_preparo: bool):
+    """Salva se o procedimento exige preparo."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tuss_exames SET tem_preparo=? WHERE codigo=?",
+            (int(tem_preparo), codigo),
         )
         conn.commit()
 
@@ -216,36 +225,3 @@ def remove_medico(medico_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM medicos WHERE id=?", (medico_id,))
         conn.commit()
-
-
-# ── Reset do banco (remove dados sensíveis, mantém só o catálogo de exames) ──
-
-def reset_database():
-    """
-    Apaga todos os dados cadastrados pelos usuários (médicos e avisos)
-    e limpa os campos 'quem_faz' e 'observacoes' da tabela de exames,
-    mantendo apenas o catálogo (codigo, nome, tem_preparo).
-
-    Use isso para "zerar" o banco antes de subir para um repositório público,
-    removendo qualquer nome de médico ou informação sensível.
-    """
-    with get_conn() as conn:
-        # Limpa tabelas com dados sensíveis
-        conn.execute("DELETE FROM medicos")
-        conn.execute("DELETE FROM avisos")
-
-        # Zera os campos preenchidos manualmente (contêm nomes de médicos)
-        conn.execute("UPDATE tuss_exames SET quem_faz='', observacoes=''")
-
-        # Reseta os contadores de autoincrement das tabelas limpas
-        conn.execute(
-            "DELETE FROM sqlite_sequence WHERE name IN ('medicos', 'avisos')"
-        )
-
-        conn.commit()
-
-    # Recupera espaço em disco ocupado pelos dados apagados
-    with get_conn() as conn:
-        conn.execute("VACUUM")
-
-    return True, "Banco de dados resetado. Restaram apenas os exames, sem dados sensíveis."

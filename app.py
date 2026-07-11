@@ -31,6 +31,5 @@ medicos = st.Page(
     url_path="medicos",
 )
 
-
-pg = st.navigation([inicio, consulta, medicos], position="top")
+pg = st.navigation([inicio, consulta, medicos], position="sidebar")
 pg.run()
