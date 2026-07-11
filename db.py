@@ -8,16 +8,6 @@ DB_PATH = "tuss.db"
 def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-def init_responsaveis():
-    with get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS responsaveis (
-                id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL UNIQUE
-            )
-        """)
-        conn.commit()
-
 def init_avisos():
     """Cria a tabela do mural de avisos, se ainda não existir."""
     with get_conn() as conn:
@@ -32,6 +22,12 @@ def init_avisos():
         """)
         conn.commit()
 
+def drop_responsaveis_table():
+    """Migração: remove a tabela 'responsaveis', substituída por 'medicos'."""
+    with get_conn() as conn:
+        conn.execute("DROP TABLE IF EXISTS responsaveis")
+        conn.commit()
+
 def init_observacoes_column():
     """Garante que a coluna 'observacoes' exista na tabela tuss_exames."""
     with get_conn() as conn:
@@ -40,27 +36,11 @@ def init_observacoes_column():
             conn.execute("ALTER TABLE tuss_exames ADD COLUMN observacoes TEXT DEFAULT ''")
             conn.commit()
 
-def get_responsaveis() -> list[str]:
+def get_nomes_medicos() -> list[str]:
+    """Retorna os nomes dos médicos cadastrados, usados no filtro 'Quem faz'."""
     with get_conn() as conn:
-        rows = conn.execute("SELECT nome FROM responsaveis ORDER BY nome").fetchall()
+        rows = conn.execute("SELECT nome FROM medicos ORDER BY nome").fetchall()
     return [r[0] for r in rows]
-
-def add_responsavel(nome: str):
-    nome = nome.strip()
-    if not nome:
-        return False, "Nome não pode ser vazio."
-    with get_conn() as conn:
-        try:
-            conn.execute("INSERT INTO responsaveis (nome) VALUES (?)", (nome,))
-            conn.commit()
-            return True, f'"{nome}" adicionado.'
-        except sqlite3.IntegrityError:
-            return False, f'"{nome}" já existe na lista.'
-
-def remove_responsavel(nome: str):
-    with get_conn() as conn:
-        conn.execute("DELETE FROM responsaveis WHERE nome = ?", (nome,))
-        conn.commit()
 
 def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None):
     query = "SELECT codigo, nome, quem_faz, tem_preparo, observacoes FROM tuss_exames WHERE 1=1"
@@ -242,9 +222,9 @@ def remove_medico(medico_id: int):
 
 def reset_database():
     """
-    Apaga todos os dados cadastrados pelos usuários (médicos, avisos,
-    responsáveis) e limpa os campos 'quem_faz' e 'observacoes' da tabela
-    de exames, mantendo apenas o catálogo (codigo, nome, tem_preparo).
+    Apaga todos os dados cadastrados pelos usuários (médicos e avisos)
+    e limpa os campos 'quem_faz' e 'observacoes' da tabela de exames,
+    mantendo apenas o catálogo (codigo, nome, tem_preparo).
 
     Use isso para "zerar" o banco antes de subir para um repositório público,
     removendo qualquer nome de médico ou informação sensível.
@@ -253,14 +233,13 @@ def reset_database():
         # Limpa tabelas com dados sensíveis
         conn.execute("DELETE FROM medicos")
         conn.execute("DELETE FROM avisos")
-        conn.execute("DELETE FROM responsaveis")
 
         # Zera os campos preenchidos manualmente (contêm nomes de médicos)
         conn.execute("UPDATE tuss_exames SET quem_faz='', observacoes=''")
 
         # Reseta os contadores de autoincrement das tabelas limpas
         conn.execute(
-            "DELETE FROM sqlite_sequence WHERE name IN ('medicos', 'avisos', 'responsaveis')"
+            "DELETE FROM sqlite_sequence WHERE name IN ('medicos', 'avisos')"
         )
 
         conn.commit()
