@@ -236,3 +236,37 @@ def remove_medico(medico_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM medicos WHERE id=?", (medico_id,))
         conn.commit()
+
+
+# ── Reset do banco (remove dados sensíveis, mantém só o catálogo de exames) ──
+
+def reset_database():
+    """
+    Apaga todos os dados cadastrados pelos usuários (médicos, avisos,
+    responsáveis) e limpa os campos 'quem_faz' e 'observacoes' da tabela
+    de exames, mantendo apenas o catálogo (codigo, nome, tem_preparo).
+
+    Use isso para "zerar" o banco antes de subir para um repositório público,
+    removendo qualquer nome de médico ou informação sensível.
+    """
+    with get_conn() as conn:
+        # Limpa tabelas com dados sensíveis
+        conn.execute("DELETE FROM medicos")
+        conn.execute("DELETE FROM avisos")
+        conn.execute("DELETE FROM responsaveis")
+
+        # Zera os campos preenchidos manualmente (contêm nomes de médicos)
+        conn.execute("UPDATE tuss_exames SET quem_faz='', observacoes=''")
+
+        # Reseta os contadores de autoincrement das tabelas limpas
+        conn.execute(
+            "DELETE FROM sqlite_sequence WHERE name IN ('medicos', 'avisos', 'responsaveis')"
+        )
+
+        conn.commit()
+
+    # Recupera espaço em disco ocupado pelos dados apagados
+    with get_conn() as conn:
+        conn.execute("VACUUM")
+
+    return True, "Banco de dados resetado. Restaram apenas os exames, sem dados sensíveis."
