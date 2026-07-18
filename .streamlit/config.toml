@@ -1,16 +1,17 @@
 [theme]
-# Tema base escuro
-base = "dark"
-primaryColor = "#1DB954"
-backgroundColor = "#121212"
-secondaryBackgroundColor = "#212121"
-textColor = "#FFFFFF"
-baseRadius="full"
+# Tema base claro
+base = "light"
+primaryColor = "#1B5E3A"
+backgroundColor = "#FAFAF8"
+secondaryBackgroundColor = "#E9F0EA"
+textColor = "#1A1A1A"
+baseRadius = "full"
 
-# Fonte padrão sans-serif
-font = "sans serif"
+# Fonte padrão: Fira Code (Google Fonts), com fallback monospace
+font = "Fira Code:https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap, monospace"
+codeFont = "Fira Code:https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap, monospace"
 
 [theme.sidebar]
-backgroundColor = "#000000"
-secondaryBackgroundColor = "#212121"
-textColor = "#FFFFFF"
+backgroundColor = "#E9F0EA"
+secondaryBackgroundColor = "#FAFAF8"
+textColor = "#1A1A1A"
