@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Secrets locais (Supabase, login caseiro etc.) — nunca versionar
+.streamlit/secrets.toml
