@@ -1,14 +1,6 @@
 import streamlit as st
 
-from db import drop_responsaveis_table, init_observacoes_column, init_avisos, init_medicos
-
 st.set_page_config(page_title="Tabela TUSS", page_icon=":material/table_rows:", layout="wide")
-
-# ── Inicialização do banco (idempotente) ─────────────────────────────────────
-drop_responsaveis_table()
-init_observacoes_column()
-init_avisos()
-init_medicos()
 
 # ── Navegação ─────────────────────────────────────────────────────────────────
 inicio = st.Page(

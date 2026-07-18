@@ -1,103 +1,109 @@
-import sqlite3
+import streamlit as st
 import pandas as pd
+from supabase import create_client, Client
 
-DB_PATH = "tuss.db"
+# ── Cliente Supabase ──────────────────────────────────────────────────────────
 
-# ── Banco de dados ──────────────────────────────────────────────────────────
+@st.cache_resource
+def get_client() -> Client:
+    """Cliente Supabase, reaproveitado entre reruns via cache_resource."""
+    return create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
 
-def get_conn():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
-
-def init_avisos():
-    """Cria a tabela do mural de avisos, se ainda não existir."""
-    with get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS avisos (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                titulo    TEXT NOT NULL,
-                texto     TEXT NOT NULL,
-                fixado    INTEGER NOT NULL DEFAULT 0,
-                criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-            )
-        """)
-        conn.commit()
-
-def drop_responsaveis_table():
-    """Migração: remove a tabela 'responsaveis', substituída por 'medicos'."""
-    with get_conn() as conn:
-        conn.execute("DROP TABLE IF EXISTS responsaveis")
-        conn.commit()
-
-def init_observacoes_column():
-    """Garante que a coluna 'observacoes' exista na tabela tuss_exames."""
-    with get_conn() as conn:
-        cols = [c[1] for c in conn.execute("PRAGMA table_info(tuss_exames)").fetchall()]
-        if "observacoes" not in cols:
-            conn.execute("ALTER TABLE tuss_exames ADD COLUMN observacoes TEXT DEFAULT ''")
-            conn.commit()
 
 def get_nomes_medicos() -> list[str]:
     """Retorna os nomes dos médicos cadastrados, usados no filtro 'Quem faz'."""
-    with get_conn() as conn:
-        rows = conn.execute("SELECT nome FROM medicos ORDER BY nome").fetchall()
-    return [r[0] for r in rows]
+    sb = get_client()
+    resp = sb.table("medicos").select("nome").order("nome").execute()
+    return [r["nome"] for r in resp.data]
 
-def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None):
-    query = "SELECT codigo, nome, quem_faz, tem_preparo, observacoes FROM tuss_exames WHERE 1=1"
-    params = []
+
+def _mapa_medicos_por_exame() -> dict[str, list[str]]:
+    """Constrói {codigo_exame: [nomes_medicos]} em uma única query (join embutido)."""
+    sb = get_client()
+    resp = sb.table("exame_medico").select("exame_codigo, medicos(nome)").execute()
+    mapa: dict[str, list[str]] = {}
+    for row in resp.data:
+        medico = row.get("medicos")
+        if medico and medico.get("nome"):
+            mapa.setdefault(row["exame_codigo"], []).append(medico["nome"])
+    return mapa
+
+
+def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None) -> pd.DataFrame:
+    sb = get_client()
+    colunas = ["codigo", "nome", "tem_preparo", "observacoes"]
+    query = sb.table("tuss_exames").select(", ".join(colunas))
+
     if search:
-        query += " AND (codigo LIKE ? OR nome LIKE ?)"
-        params += [f"%{search}%", f"%{search}%"]
+        termo = search.replace("%", "").replace(",", "")
+        query = query.or_(f"codigo.ilike.%{termo}%,nome.ilike.%{termo}%")
+
     if filtro_preparo == "Com preparo":
-        query += " AND tem_preparo = 1"
+        query = query.eq("tem_preparo", True)
     elif filtro_preparo == "Sem preparo":
-        query += " AND tem_preparo = 0"
+        query = query.eq("tem_preparo", False)
+
     if filtro_quem:
-        # Filtra linhas que contenham QUALQUER um dos responsáveis selecionados
-        cond = " OR ".join(["quem_faz LIKE ?" for _ in filtro_quem])
-        query += f" AND ({cond})"
-        params += [f"%{r}%" for r in filtro_quem]
-    query += " ORDER BY nome"
-    with get_conn() as conn:
-        df = pd.read_sql_query(query, conn, params=params)
+        medicos_resp = sb.table("medicos").select("id").in_("nome", filtro_quem).execute()
+        medico_ids = [m["id"] for m in medicos_resp.data]
+        if not medico_ids:
+            return pd.DataFrame(columns=["codigo", "nome", "quem_faz", "tem_preparo", "observacoes"])
+
+        vinculos_resp = (
+            sb.table("exame_medico").select("exame_codigo").in_("medico_id", medico_ids).execute()
+        )
+        codigos_permitidos = list({v["exame_codigo"] for v in vinculos_resp.data})
+        if not codigos_permitidos:
+            return pd.DataFrame(columns=["codigo", "nome", "quem_faz", "tem_preparo", "observacoes"])
+        query = query.in_("codigo", codigos_permitidos)
+
+    resp = query.order("nome").execute()
+    df = pd.DataFrame(resp.data, columns=colunas)
+
+    if df.empty:
+        return pd.DataFrame(columns=["codigo", "nome", "quem_faz", "tem_preparo", "observacoes"])
+
+    mapa = _mapa_medicos_por_exame()
+    df["quem_faz"] = df["codigo"].apply(lambda c: ", ".join(sorted(mapa.get(c, []))))
     df["tem_preparo"] = df["tem_preparo"].astype(bool)
     df["observacoes"] = df["observacoes"].fillna("")
-    return df
+    return df[["codigo", "nome", "quem_faz", "tem_preparo", "observacoes"]]
 
 
 def save_quem_faz(codigo: str, medicos_selecionados: list[str]):
-    """Salva a lista de médicos responsáveis por um procedimento (separados por vírgula)."""
-    valor = ", ".join(medicos_selecionados)
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE tuss_exames SET quem_faz=? WHERE codigo=?",
-            (valor, codigo),
-        )
-        conn.commit()
+    """Substitui os vínculos exame-médico de um procedimento pelos nomes selecionados."""
+    sb = get_client()
+    sb.table("exame_medico").delete().eq("exame_codigo", codigo).execute()
+    if not medicos_selecionados:
+        return
+    medicos_resp = sb.table("medicos").select("id").in_("nome", medicos_selecionados).execute()
+    ids = [m["id"] for m in medicos_resp.data]
+    if ids:
+        sb.table("exame_medico").insert(
+            [{"exame_codigo": codigo, "medico_id": i} for i in ids]
+        ).execute()
+
 
 def save_observacoes(codigo: str, texto: str):
     """Salva o texto de observações de um procedimento."""
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE tuss_exames SET observacoes=? WHERE codigo=?",
-            (texto, codigo),
-        )
-        conn.commit()
+    sb = get_client()
+    sb.table("tuss_exames").update({"observacoes": texto}).eq("codigo", codigo).execute()
+
 
 def save_tem_preparo(codigo: str, tem_preparo: bool):
     """Salva se o procedimento exige preparo."""
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE tuss_exames SET tem_preparo=? WHERE codigo=?",
-            (int(tem_preparo), codigo),
-        )
-        conn.commit()
+    sb = get_client()
+    sb.table("tuss_exames").update({"tem_preparo": tem_preparo}).eq("codigo", codigo).execute()
+
 
 def count_stats():
-    with get_conn() as conn:
-        total     = conn.execute("SELECT COUNT(*) FROM tuss_exames").fetchone()[0]
-        c_preparo = conn.execute("SELECT COUNT(*) FROM tuss_exames WHERE tem_preparo=1").fetchone()[0]
-        c_quem    = conn.execute("SELECT COUNT(*) FROM tuss_exames WHERE quem_faz != '' AND quem_faz IS NOT NULL").fetchone()[0]
+    sb = get_client()
+    total = sb.table("tuss_exames").select("codigo", count="exact").execute().count or 0
+    c_preparo = (
+        sb.table("tuss_exames").select("codigo", count="exact").eq("tem_preparo", True).execute().count or 0
+    )
+    vinculos = sb.table("exame_medico").select("exame_codigo").execute()
+    c_quem = len({v["exame_codigo"] for v in vinculos.data})
     return total, c_preparo, c_quem
 
 
@@ -105,104 +111,92 @@ def count_stats():
 
 def get_avisos() -> list[dict]:
     """Retorna todos os avisos, fixados primeiro e depois por data (mais recente primeiro)."""
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, titulo, texto, fixado, criado_em FROM avisos "
-            "ORDER BY fixado DESC, criado_em DESC, id DESC"
-        ).fetchall()
-    return [
-        {"id": r[0], "titulo": r[1], "texto": r[2], "fixado": bool(r[3]), "criado_em": r[4]}
-        for r in rows
-    ]
+    sb = get_client()
+    resp = (
+        sb.table("avisos")
+        .select("id, titulo, texto, fixado, criado_em")
+        .order("fixado", desc=True)
+        .order("criado_em", desc=True)
+        .order("id", desc=True)
+        .execute()
+    )
+    return resp.data
+
 
 def add_aviso(titulo: str, texto: str, fixado: bool = False):
     titulo = titulo.strip()
     texto = texto.strip()
     if not titulo or not texto:
         return False, "Título e mensagem são obrigatórios."
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO avisos (titulo, texto, fixado) VALUES (?, ?, ?)",
-            (titulo, texto, int(fixado)),
-        )
-        conn.commit()
+    sb = get_client()
+    try:
+        sb.table("avisos").insert({"titulo": titulo, "texto": texto, "fixado": fixado}).execute()
+    except Exception as e:
+        return False, f"Erro ao publicar aviso: {e}"
     return True, "Aviso publicado no mural."
+
 
 def update_aviso(aviso_id: int, titulo: str, texto: str, fixado: bool):
     titulo = titulo.strip()
     texto = texto.strip()
     if not titulo or not texto:
         return False, "Título e mensagem são obrigatórios."
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE avisos SET titulo=?, texto=?, fixado=? WHERE id=?",
-            (titulo, texto, int(fixado), aviso_id),
-        )
-        conn.commit()
+    sb = get_client()
+    try:
+        sb.table("avisos").update(
+            {"titulo": titulo, "texto": texto, "fixado": fixado}
+        ).eq("id", aviso_id).execute()
+    except Exception as e:
+        return False, f"Erro ao atualizar aviso: {e}"
     return True, "Aviso atualizado."
 
+
 def remove_aviso(aviso_id: int):
-    with get_conn() as conn:
-        conn.execute("DELETE FROM avisos WHERE id=?", (aviso_id,))
-        conn.commit()
+    sb = get_client()
+    sb.table("avisos").delete().eq("id", aviso_id).execute()
+
 
 # ── Médicos ──────────────────────────────────────────────────────────────────
 
-def init_medicos():
-    """Cria a tabela de médicos, se ainda não existir."""
-    with get_conn() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS medicos (
-                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome               TEXT NOT NULL,
-                local_atendimento  TEXT,
-                horario            TEXT,
-                ordem_atendimento  TEXT NOT NULL DEFAULT 'Ordem de chegada',
-                idade_minima       INTEGER NOT NULL DEFAULT 0,
-                exames_por_dia     INTEGER,
-                observacoes        TEXT DEFAULT ''
-            )
-        """)
-        conn.commit()
-
 def get_medicos() -> list[dict]:
     """Retorna todos os médicos cadastrados, ordenados por nome."""
-    with get_conn() as conn:
-        rows = conn.execute("""
-            SELECT id, nome, local_atendimento, horario, ordem_atendimento,
-                   idade_minima, exames_por_dia, observacoes
-            FROM medicos
-            ORDER BY nome
-        """).fetchall()
-    return [
-        {
-            "id": r[0],
-            "nome": r[1],
-            "local_atendimento": r[2] or "",
-            "horario": r[3] or "",
-            "ordem_atendimento": r[4],
-            "idade_minima": r[5],
-            "exames_por_dia": r[6],
-            "observacoes": r[7] or "",
-        }
-        for r in rows
-    ]
+    sb = get_client()
+    resp = (
+        sb.table("medicos")
+        .select("id, nome, local_atendimento, horario, ordem_atendimento, idade_minima, exames_por_dia, observacoes")
+        .order("nome")
+        .execute()
+    )
+    medicos = resp.data
+    for m in medicos:
+        m["local_atendimento"] = m.get("local_atendimento") or ""
+        m["horario"] = m.get("horario") or ""
+        m["observacoes"] = m.get("observacoes") or ""
+    return medicos
+
 
 def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendimento: str,
                idade_minima: int, exames_por_dia: int | None, observacoes: str = ""):
     nome = nome.strip()
     if not nome:
         return False, "Nome não pode ser vazio."
-    with get_conn() as conn:
-        conn.execute("""
-            INSERT INTO medicos
-                (nome, local_atendimento, horario, ordem_atendimento,
-                 idade_minima, exames_por_dia, observacoes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (nome, local_atendimento.strip(), horario.strip(), ordem_atendimento,
-              idade_minima, exames_por_dia, observacoes.strip()))
-        conn.commit()
+    sb = get_client()
+    try:
+        sb.table("medicos").insert({
+            "nome": nome,
+            "local_atendimento": local_atendimento.strip(),
+            "horario": horario.strip(),
+            "ordem_atendimento": ordem_atendimento,
+            "idade_minima": idade_minima,
+            "exames_por_dia": exames_por_dia,
+            "observacoes": observacoes.strip(),
+        }).execute()
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return False, f'Já existe um médico chamado "{nome}".'
+        return False, f"Erro ao cadastrar: {e}"
     return True, f'Dr(a). "{nome}" cadastrado(a).'
+
 
 def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: str,
                    ordem_atendimento: str, idade_minima: int,
@@ -210,18 +204,25 @@ def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: st
     nome = nome.strip()
     if not nome:
         return False, "Nome não pode ser vazio."
-    with get_conn() as conn:
-        conn.execute("""
-            UPDATE medicos
-            SET nome=?, local_atendimento=?, horario=?, ordem_atendimento=?,
-                idade_minima=?, exames_por_dia=?, observacoes=?
-            WHERE id=?
-        """, (nome, local_atendimento.strip(), horario.strip(), ordem_atendimento,
-              idade_minima, exames_por_dia, observacoes.strip(), medico_id))
-        conn.commit()
+    sb = get_client()
+    try:
+        sb.table("medicos").update({
+            "nome": nome,
+            "local_atendimento": local_atendimento.strip(),
+            "horario": horario.strip(),
+            "ordem_atendimento": ordem_atendimento,
+            "idade_minima": idade_minima,
+            "exames_por_dia": exames_por_dia,
+            "observacoes": observacoes.strip(),
+        }).eq("id", medico_id).execute()
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return False, f'Já existe um médico chamado "{nome}".'
+        return False, f"Erro ao atualizar: {e}"
     return True, "Dados atualizados."
 
+
 def remove_medico(medico_id: int):
-    with get_conn() as conn:
-        conn.execute("DELETE FROM medicos WHERE id=?", (medico_id,))
-        conn.commit()
+    """Remove o médico; vínculos em exame_medico são removidos em cascata (ON DELETE CASCADE)."""
+    sb = get_client()
+    sb.table("medicos").delete().eq("id", medico_id).execute()

@@ -1,10 +1,8 @@
 import streamlit as st
 
-from db import init_medicos, get_medicos, add_medico, update_medico, remove_medico
+from db import get_medicos, add_medico, update_medico, remove_medico
 
 st.title("Médicos")
-
-init_medicos()
 
 ORDENS = ["Hora marcada", "Ordem de chegada"]
 
