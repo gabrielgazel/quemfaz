@@ -3,6 +3,8 @@ import streamlit as st
 from db import get_medicos, add_medico, update_medico, remove_medico
 
 st.title("Médicos")
+st.caption("Gerencie os médicos que realizam os exames.")
+st.divider()
 
 ORDENS = ["Hora marcada", "Ordem de chegada"]
 

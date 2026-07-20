@@ -3,12 +3,8 @@ import streamlit as st
 from db import get_avisos, add_aviso, update_aviso, remove_aviso
 
 # ── Header ──────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="tuss-header">
-  <h1>Mural de Avisos</h1>
-  <p>Informações e comunicados importantes sobre a gestão dos procedimentos TUSS</p>
-</div>
-""", unsafe_allow_html=True)
+st.title("Mural de Avisos")
+st.write("Aqui você pode publicar avisos importantes para toda a equipe.")
 
 st.divider()
 

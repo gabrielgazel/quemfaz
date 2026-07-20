@@ -3,12 +3,8 @@ import streamlit as st
 from db import get_nomes_medicos, fetch_all, save_quem_faz, save_observacoes, save_tem_preparo
 
 # ── Header ──────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="tuss-header">
-  <h1>Tabela TUSS — Gestão de Exames</h1>
-  <p>Pesquise um procedimento para ver preparo, responsável e observações</p>
-</div>
-""", unsafe_allow_html=True)
+st.title("Consultar exames")
+st.write("Pesquise por nome, código TUSS, preparo ou médico responsável")
 
 st.divider()
 
