@@ -71,11 +71,13 @@ with col_botao:
     if st.button("Novo aviso", icon=":material/add_circle:", use_container_width=True, type="primary"):
         dialog_novo_aviso()
 
+# ── Mural ──────────────────────────────────────────────────────────────────
+avisos = get_avisos()
+
 # Reabre o diálogo de edição se um aviso estiver selecionado
 if st.session_state["dialog_editar_aviso_id"] is not None:
-    avisos_atuais = get_avisos()
     aviso_sel = next(
-        (a for a in avisos_atuais if a["id"] == st.session_state["dialog_editar_aviso_id"]),
+        (a for a in avisos if a["id"] == st.session_state["dialog_editar_aviso_id"]),
         None,
     )
     if aviso_sel:
@@ -84,9 +86,6 @@ if st.session_state["dialog_editar_aviso_id"] is not None:
         st.session_state["dialog_editar_aviso_id"] = None
 
 st.write("")
-
-# ── Mural ──────────────────────────────────────────────────────────────────
-avisos = get_avisos()
 
 if not avisos:
     st.info(
