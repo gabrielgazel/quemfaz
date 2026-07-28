@@ -7,7 +7,7 @@ Base de dados filtrada para códigos TUSS iniciados em `4090`, `4100` e `4110` (
 ## Funcionalidades
 
 - **Login**: acesso protegido por senha única (ver [Secrets](#secrets))
-- **Início**: mural de avisos e comunicados
+- **Início**: mural de avisos e comunicados (data de publicação exibida no horário de Brasília via `formatar_data_br`)
 - **Consulta**: tabela com todos os procedimentos, filtro por nome/código, preparo e médico responsável ("Quem faz")
 - **Médicos**: cadastro dos médicos (local e horário de atendimento, ordem de atendimento, idade mínima, limite de exames/dia). Os nomes cadastrados aqui alimentam o filtro "Quem faz" da página Consulta
 - Persistência em **Supabase (Postgres)**
@@ -24,6 +24,18 @@ O banco é normalizado em 4 tabelas (schema completo em [`supabase_setup/schema.
 RLS (Row Level Security) fica **desligado** de propósito: o controle de acesso acontece na camada do app (login por senha), não no banco. Detalhes no comentário final do `schema.sql`.
 
 > O projeto rodou em SQLite até meados de 2026, quando foi migrado para Supabase. O script usado na migração one-time (SQLite → Supabase, incluindo o parse do antigo `quem_faz`) está em [`supabase_setup/migrate_data.py`](supabase_setup/migrate_data.py), preservado como referência histórica — não precisa ser executado de novo.
+
+## Cache de dados (`db.py`)
+
+Todas as funções de **leitura** em `db.py` (`get_nomes_medicos`, `_mapa_medicos_por_exame`, `fetch_all`, `count_stats`, `get_avisos`, `get_medicos`) são decoradas com `@st.cache_data(ttl=300)`. Isso evita chamadas repetidas ao Supabase a cada rerun (ex: uma por tecla digitada no filtro de busca da Consulta).
+
+**Convenção obrigatória:** toda função de **escrita** (`save_*`, `add_*`, `update_*`, `remove_*`) que altera dados lidos por alguma função cacheada precisa chamar `.clear()` nela após o sucesso da operação, para que a mudança apareça imediatamente na tela (sem esperar os 5 minutos de TTL). Exemplo: `remove_medico` limpa `get_medicos`, `get_nomes_medicos`, `fetch_all`, `_mapa_medicos_por_exame` e `count_stats`, pois a exclusão em cascata (`ON DELETE CASCADE`) afeta todas essas visões.
+
+Ao criar uma nova função de leitura cacheada ou uma nova função de escrita, mapeie manualmente essa dependência — não existe invalidação automática.
+
+## Tratamento de erros nas escritas
+
+Todas as funções de escrita em `db.py` seguem o mesmo contrato: retornam uma tupla `(ok: bool, mensagem: str | None)`. Em caso de exceção na chamada ao Supabase, `ok` é `False` e `mensagem` traz o erro; o código que chama a função deve checar `ok` antes de considerar a operação bem-sucedida (ex: antes de disparar `st.rerun()` ou `st.toast()` de sucesso) e exibir `st.error(mensagem)` caso contrário.
 
 ## Estrutura
 
