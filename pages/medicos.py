@@ -67,8 +67,11 @@ def modal_medico(medico: dict | None = None):
                 st.error(msg)
     with col_excluir:
         if medico and st.button("Excluir", use_container_width=True):
-            remove_medico(medico["id"])
-            st.rerun()
+            ok, msg = remove_medico(medico["id"])
+            if ok:
+                st.rerun()
+            else:
+                st.error(msg)
 
 
 if st.button("Novo médico", icon=":material/add:"):

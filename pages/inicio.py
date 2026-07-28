@@ -56,10 +56,13 @@ def dialog_editar_aviso(aviso: dict):
                 st.warning(msg)
     with col_excluir:
         if st.button("Excluir", icon=":material/delete:", use_container_width=True):
-            remove_aviso(aviso["id"])
-            st.toast("Aviso removido do mural.", icon=":material/delete:")
-            st.session_state["dialog_editar_aviso_id"] = None
-            st.rerun()
+            ok, msg = remove_aviso(aviso["id"])
+            if ok:
+                st.toast("Aviso removido do mural.", icon=":material/delete:")
+                st.session_state["dialog_editar_aviso_id"] = None
+                st.rerun()
+            else:
+                st.error(msg)
     with col_cancel:
         if st.button("Cancelar", use_container_width=True):
             st.session_state["dialog_editar_aviso_id"] = None

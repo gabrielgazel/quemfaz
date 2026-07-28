@@ -85,11 +85,20 @@ def modal_editar(row, nomes_medicos):
     observacoes = st.text_area("Observações", value=row["observacoes"] or "", height=100)
 
     if st.button("Salvar", type="primary", use_container_width=True, icon=":material/save:"):
-        save_quem_faz(row["codigo"], medicos_selecionados)
-        save_tem_preparo(row["codigo"], tem_preparo)
-        save_observacoes(row["codigo"], observacoes)
-        st.toast("Procedimento atualizado.", icon=":material/check_circle:")
-        st.rerun()
+        erros = []
+        for ok, msg in (
+            save_quem_faz(row["codigo"], medicos_selecionados),
+            save_tem_preparo(row["codigo"], tem_preparo),
+            save_observacoes(row["codigo"], observacoes),
+        ):
+            if not ok:
+                erros.append(msg)
+        if erros:
+            for erro in erros:
+                st.error(erro)
+        else:
+            st.toast("Procedimento atualizado.", icon=":material/check_circle:")
+            st.rerun()
 
 # ── Exibição do resultado em cards (sem tabela/dataframe) ────────────────────
 for _, row in df.iterrows():

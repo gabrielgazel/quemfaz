@@ -78,27 +78,39 @@ def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None) -> pd.DataFra
 def save_quem_faz(codigo: str, medicos_selecionados: list[str]):
     """Substitui os vínculos exame-médico de um procedimento pelos nomes selecionados."""
     sb = get_client()
-    sb.table("exame_medico").delete().eq("exame_codigo", codigo).execute()
-    if not medicos_selecionados:
-        return
-    medicos_resp = sb.table("medicos").select("id").in_("nome", medicos_selecionados).execute()
-    ids = [m["id"] for m in medicos_resp.data]
-    if ids:
-        sb.table("exame_medico").insert(
-            [{"exame_codigo": codigo, "medico_id": i} for i in ids]
-        ).execute()
+    try:
+        sb.table("exame_medico").delete().eq("exame_codigo", codigo).execute()
+        if not medicos_selecionados:
+            return True, None
+        medicos_resp = sb.table("medicos").select("id").in_("nome", medicos_selecionados).execute()
+        ids = [m["id"] for m in medicos_resp.data]
+        if ids:
+            sb.table("exame_medico").insert(
+                [{"exame_codigo": codigo, "medico_id": i} for i in ids]
+            ).execute()
+    except Exception as e:
+        return False, f"Erro ao salvar os médicos responsáveis: {e}"
+    return True, None
 
 
 def save_observacoes(codigo: str, texto: str):
     """Salva o texto de observações de um procedimento."""
     sb = get_client()
-    sb.table("tuss_exames").update({"observacoes": texto}).eq("codigo", codigo).execute()
+    try:
+        sb.table("tuss_exames").update({"observacoes": texto}).eq("codigo", codigo).execute()
+    except Exception as e:
+        return False, f"Erro ao salvar observações: {e}"
+    return True, None
 
 
 def save_tem_preparo(codigo: str, tem_preparo: bool):
     """Salva se o procedimento exige preparo."""
     sb = get_client()
-    sb.table("tuss_exames").update({"tem_preparo": tem_preparo}).eq("codigo", codigo).execute()
+    try:
+        sb.table("tuss_exames").update({"tem_preparo": tem_preparo}).eq("codigo", codigo).execute()
+    except Exception as e:
+        return False, f"Erro ao salvar preparo: {e}"
+    return True, None
 
 
 def count_stats():
@@ -169,7 +181,11 @@ def update_aviso(aviso_id: int, titulo: str, texto: str, fixado: bool):
 
 def remove_aviso(aviso_id: int):
     sb = get_client()
-    sb.table("avisos").delete().eq("id", aviso_id).execute()
+    try:
+        sb.table("avisos").delete().eq("id", aviso_id).execute()
+    except Exception as e:
+        return False, f"Erro ao remover aviso: {e}"
+    return True, None
 
 
 # ── Médicos ──────────────────────────────────────────────────────────────────
@@ -241,4 +257,8 @@ def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: st
 def remove_medico(medico_id: int):
     """Remove o médico; vínculos em exame_medico são removidos em cascata (ON DELETE CASCADE)."""
     sb = get_client()
-    sb.table("medicos").delete().eq("id", medico_id).execute()
+    try:
+        sb.table("medicos").delete().eq("id", medico_id).execute()
+    except Exception as e:
+        return False, f"Erro ao remover médico: {e}"
+    return True, None
