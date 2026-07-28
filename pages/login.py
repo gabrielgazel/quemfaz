@@ -1,7 +1,6 @@
 import streamlit as st
 
 # Título principal da página limpa
-st.set_page_config(page_title="Login - QuemFAZ", page_icon=":material/lock:", layout="centered")
 st.title("Login")
 st.write("Bem-vindo ao sistema de gerenciamento e consulta de médicos que executam ou não determinados exames da tabela TUSS.")
 
