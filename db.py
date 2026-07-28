@@ -15,6 +15,7 @@ def get_client() -> Client:
     return create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
 
 
+@st.cache_data(ttl=300)
 def get_nomes_medicos() -> list[str]:
     """Retorna os nomes dos médicos cadastrados, usados no filtro 'Quem faz'."""
     sb = get_client()
@@ -22,6 +23,7 @@ def get_nomes_medicos() -> list[str]:
     return [r["nome"] for r in resp.data]
 
 
+@st.cache_data(ttl=300)
 def _mapa_medicos_por_exame() -> dict[str, list[str]]:
     """Constrói {codigo_exame: [nomes_medicos]} em uma única query (join embutido)."""
     sb = get_client()
@@ -34,6 +36,7 @@ def _mapa_medicos_por_exame() -> dict[str, list[str]]:
     return mapa
 
 
+@st.cache_data(ttl=300)
 def fetch_all(search="", filtro_preparo="Todos", filtro_quem=None) -> pd.DataFrame:
     sb = get_client()
     colunas = ["codigo", "nome", "tem_preparo", "observacoes"]
@@ -81,6 +84,9 @@ def save_quem_faz(codigo: str, medicos_selecionados: list[str]):
     try:
         sb.table("exame_medico").delete().eq("exame_codigo", codigo).execute()
         if not medicos_selecionados:
+            _mapa_medicos_por_exame.clear()
+            fetch_all.clear()
+            count_stats.clear()
             return True, None
         medicos_resp = sb.table("medicos").select("id").in_("nome", medicos_selecionados).execute()
         ids = [m["id"] for m in medicos_resp.data]
@@ -90,6 +96,9 @@ def save_quem_faz(codigo: str, medicos_selecionados: list[str]):
             ).execute()
     except Exception as e:
         return False, f"Erro ao salvar os médicos responsáveis: {e}"
+    _mapa_medicos_por_exame.clear()
+    fetch_all.clear()
+    count_stats.clear()
     return True, None
 
 
@@ -100,6 +109,7 @@ def save_observacoes(codigo: str, texto: str):
         sb.table("tuss_exames").update({"observacoes": texto}).eq("codigo", codigo).execute()
     except Exception as e:
         return False, f"Erro ao salvar observações: {e}"
+    fetch_all.clear()
     return True, None
 
 
@@ -110,9 +120,12 @@ def save_tem_preparo(codigo: str, tem_preparo: bool):
         sb.table("tuss_exames").update({"tem_preparo": tem_preparo}).eq("codigo", codigo).execute()
     except Exception as e:
         return False, f"Erro ao salvar preparo: {e}"
+    fetch_all.clear()
+    count_stats.clear()
     return True, None
 
 
+@st.cache_data(ttl=300)
 def count_stats():
     sb = get_client()
     total = sb.table("tuss_exames").select("codigo", count="exact").execute().count or 0
@@ -137,6 +150,7 @@ def formatar_data_br(timestamp_iso: str) -> str:
         return timestamp_iso
 
 
+@st.cache_data(ttl=300)
 def get_avisos() -> list[dict]:
     """Retorna todos os avisos, fixados primeiro e depois por data (mais recente primeiro)."""
     sb = get_client()
@@ -161,6 +175,7 @@ def add_aviso(titulo: str, texto: str, fixado: bool = False):
         sb.table("avisos").insert({"titulo": titulo, "texto": texto, "fixado": fixado}).execute()
     except Exception as e:
         return False, f"Erro ao publicar aviso: {e}"
+    get_avisos.clear()
     return True, "Aviso publicado no mural."
 
 
@@ -176,6 +191,7 @@ def update_aviso(aviso_id: int, titulo: str, texto: str, fixado: bool):
         ).eq("id", aviso_id).execute()
     except Exception as e:
         return False, f"Erro ao atualizar aviso: {e}"
+    get_avisos.clear()
     return True, "Aviso atualizado."
 
 
@@ -185,11 +201,13 @@ def remove_aviso(aviso_id: int):
         sb.table("avisos").delete().eq("id", aviso_id).execute()
     except Exception as e:
         return False, f"Erro ao remover aviso: {e}"
+    get_avisos.clear()
     return True, None
 
 
 # ── Médicos ──────────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=300)
 def get_medicos() -> list[dict]:
     """Retorna todos os médicos cadastrados, ordenados por nome."""
     sb = get_client()
@@ -227,6 +245,8 @@ def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendiment
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
             return False, f'Já existe um médico chamado "{nome}".'
         return False, f"Erro ao cadastrar: {e}"
+    get_medicos.clear()
+    get_nomes_medicos.clear()
     return True, f'Dr(a). "{nome}" cadastrado(a).'
 
 
@@ -251,6 +271,9 @@ def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: st
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
             return False, f'Já existe um médico chamado "{nome}".'
         return False, f"Erro ao atualizar: {e}"
+    get_medicos.clear()
+    get_nomes_medicos.clear()
+    fetch_all.clear()
     return True, "Dados atualizados."
 
 
@@ -261,4 +284,9 @@ def remove_medico(medico_id: int):
         sb.table("medicos").delete().eq("id", medico_id).execute()
     except Exception as e:
         return False, f"Erro ao remover médico: {e}"
+    get_medicos.clear()
+    get_nomes_medicos.clear()
+    fetch_all.clear()
+    _mapa_medicos_por_exame.clear()
+    count_stats.clear()
     return True, None
