@@ -1,6 +1,6 @@
 import streamlit as st
 
-from db import get_avisos, add_aviso, update_aviso, remove_aviso
+from db import get_avisos, add_aviso, update_aviso, remove_aviso, formatar_data_br
 
 # ── Header ──────────────────────────────────────────────────────────────────
 st.title("Mural de Avisos")
@@ -102,7 +102,7 @@ else:
                     st.markdown(f"##### :material/push_pin: {aviso['titulo']}")
                 else:
                     st.markdown(f"##### {aviso['titulo']}")
-                st.caption(aviso["criado_em"])
+                st.caption(formatar_data_br(aviso["criado_em"]))
                 st.write(aviso["texto"])
 
             with col_acao:

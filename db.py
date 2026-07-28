@@ -1,6 +1,11 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
+
+FUSO_BR = ZoneInfo("America/Sao_Paulo")
 
 # ── Cliente Supabase ──────────────────────────────────────────────────────────
 
@@ -108,6 +113,17 @@ def count_stats():
 
 
 # ── Mural de avisos ──────────────────────────────────────────────────────────
+
+def formatar_data_br(timestamp_iso: str) -> str:
+    """Converte um timestamp ISO (UTC) do Supabase para 'dd/mm/AAAA às HH:MM' no horário de Brasília."""
+    if not timestamp_iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(timestamp_iso.replace("Z", "+00:00"))
+        return dt.astimezone(FUSO_BR).strftime("%d/%m/%Y às %H:%M")
+    except (ValueError, TypeError):
+        return timestamp_iso
+
 
 def get_avisos() -> list[dict]:
     """Retorna todos os avisos, fixados primeiro e depois por data (mais recente primeiro)."""
