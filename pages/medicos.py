@@ -74,7 +74,7 @@ def modal_medico(medico: dict | None = None):
                 st.error(msg)
 
 
-if st.button("Novo médico", icon=":material/add:"):
+if st.button("Novo médico", type="primary", icon=":material/add:"):
     modal_medico()
 
 medicos = get_medicos()
