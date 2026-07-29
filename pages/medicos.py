@@ -13,6 +13,15 @@ DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 @st.dialog("Médico")
 def modal_medico(medico: dict | None = None):
     nome = st.text_input("Nome", value=medico["nome"] if medico else "")
+
+    agenda_atual = [d for d in (medico["agenda"] if medico else []) if d in DIAS_SEMANA]
+    agenda = st.pills(
+        "Agenda",
+        options=DIAS_SEMANA,
+        default=agenda_atual,
+        selection_mode="multi",
+    )
+
     local_atendimento = st.text_input(
         "Local de atendimento",
         value=medico["local_atendimento"] if medico else "",
@@ -27,14 +36,6 @@ def modal_medico(medico: dict | None = None):
         options=ORDENS,
         index=ORDENS.index(medico["ordem_atendimento"]) if medico else 1,
         horizontal=True,
-    )
-
-    agenda_atual = [d for d in (medico["agenda"] if medico else []) if d in DIAS_SEMANA]
-    agenda = st.pills(
-        "Agenda",
-        options=DIAS_SEMANA,
-        default=agenda_atual,
-        selection_mode="multi",
     )
 
     col1, col2 = st.columns(2)
@@ -97,6 +98,10 @@ else:
         with colunas[i % 3]:
             with st.container(border=True):
                 st.markdown(f"### {medico['nome']}")
+                st.markdown(
+                    f":material/calendar_month: **Agenda:** "
+                    f"{', '.join(medico['agenda']) if medico['agenda'] else '—'}"
+                )
                 st.markdown(f":material/location_on: **Local:** {medico['local_atendimento'] or '—'}")
                 st.markdown(f":material/schedule: **Horário:** {medico['horario'] or '—'}")
 
@@ -110,10 +115,6 @@ else:
                 st.markdown(
                     f":material/event_repeat: **Exames/dia:** "
                     f"{medico['exames_por_dia'] if medico['exames_por_dia'] else 'sem limite'}"
-                )
-                st.markdown(
-                    f":material/calendar_month: **Agenda:** "
-                    f"{', '.join(medico['agenda']) if medico['agenda'] else '—'}"
                 )
 
                 if medico["observacoes"]:
