@@ -7,6 +7,7 @@ st.caption("Gerencie os médicos que realizam os exames.")
 st.divider()
 
 ORDENS = ["Hora marcada", "Ordem de chegada"]
+DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 
 
 @st.dialog("Médico")
@@ -26,6 +27,14 @@ def modal_medico(medico: dict | None = None):
         options=ORDENS,
         index=ORDENS.index(medico["ordem_atendimento"]) if medico else 1,
         horizontal=True,
+    )
+
+    agenda_atual = [d for d in (medico["agenda"] if medico else []) if d in DIAS_SEMANA]
+    agenda = st.pills(
+        "Agenda",
+        options=DIAS_SEMANA,
+        default=agenda_atual,
+        selection_mode="multi",
     )
 
     col1, col2 = st.columns(2)
@@ -55,11 +64,12 @@ def modal_medico(medico: dict | None = None):
                 ok, msg = update_medico(
                     medico["id"], nome, local_atendimento, horario,
                     ordem_atendimento, idade_minima, exames_valor, observacoes,
+                    agenda,
                 )
             else:
                 ok, msg = add_medico(
                     nome, local_atendimento, horario, ordem_atendimento,
-                    idade_minima, exames_valor, observacoes,
+                    idade_minima, exames_valor, observacoes, agenda,
                 )
             if ok:
                 st.rerun()
@@ -100,6 +110,10 @@ else:
                 st.markdown(
                     f":material/event_repeat: **Exames/dia:** "
                     f"{medico['exames_por_dia'] if medico['exames_por_dia'] else 'sem limite'}"
+                )
+                st.markdown(
+                    f":material/calendar_month: **Agenda:** "
+                    f"{', '.join(medico['agenda']) if medico['agenda'] else '—'}"
                 )
 
                 if medico["observacoes"]:

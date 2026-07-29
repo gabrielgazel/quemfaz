@@ -24,7 +24,8 @@ create table if not exists medicos (
     ordem_atendimento  text not null default 'Ordem de chegada',
     idade_minima       integer not null default 0,
     exames_por_dia     integer,
-    observacoes        text default ''
+    observacoes        text default '',
+    agenda             text[] not null default '{}'  -- dias de atendimento: Seg, Ter, Qua, Qui, Sex, Sáb
 );
 
 -- Evita dois médicos com o mesmo nome (case-insensitive)
@@ -67,3 +68,13 @@ create index if not exists idx_avisos_fixado_criado on avisos (fixado desc, cria
 -- reescrito em algo client-side (JS puro, por exemplo), isso precisa mudar
 -- para políticas de RLS antes de expor a key no cliente.
 -- ============================================================================
+
+-- ============================================================================
+-- MIGRAÇÃO — coluna "agenda" em medicos
+--
+-- O banco já está em produção, então "create table if not exists" acima não
+-- adiciona a coluna em uma tabela existente. Rode o comando abaixo uma única
+-- vez no SQL Editor do Supabase para atualizar o banco atual:
+-- ============================================================================
+-- alter table medicos
+--     add column if not exists agenda text[] not null default '{}';

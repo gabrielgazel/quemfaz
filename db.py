@@ -213,7 +213,10 @@ def get_medicos() -> list[dict]:
     sb = get_client()
     resp = (
         sb.table("medicos")
-        .select("id, nome, local_atendimento, horario, ordem_atendimento, idade_minima, exames_por_dia, observacoes")
+        .select(
+            "id, nome, local_atendimento, horario, ordem_atendimento, "
+            "idade_minima, exames_por_dia, observacoes, agenda"
+        )
         .order("nome")
         .execute()
     )
@@ -222,11 +225,13 @@ def get_medicos() -> list[dict]:
         m["local_atendimento"] = m.get("local_atendimento") or ""
         m["horario"] = m.get("horario") or ""
         m["observacoes"] = m.get("observacoes") or ""
+        m["agenda"] = m.get("agenda") or []
     return medicos
 
 
 def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendimento: str,
-               idade_minima: int, exames_por_dia: int | None, observacoes: str = ""):
+               idade_minima: int, exames_por_dia: int | None, observacoes: str = "",
+               agenda: list[str] | None = None):
     nome = nome.strip()
     if not nome:
         return False, "Nome não pode ser vazio."
@@ -240,6 +245,7 @@ def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendiment
             "idade_minima": idade_minima,
             "exames_por_dia": exames_por_dia,
             "observacoes": observacoes.strip(),
+            "agenda": agenda or [],
         }).execute()
     except Exception as e:
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
@@ -252,7 +258,8 @@ def add_medico(nome: str, local_atendimento: str, horario: str, ordem_atendiment
 
 def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: str,
                    ordem_atendimento: str, idade_minima: int,
-                   exames_por_dia: int | None, observacoes: str = ""):
+                   exames_por_dia: int | None, observacoes: str = "",
+                   agenda: list[str] | None = None):
     nome = nome.strip()
     if not nome:
         return False, "Nome não pode ser vazio."
@@ -266,6 +273,7 @@ def update_medico(medico_id: int, nome: str, local_atendimento: str, horario: st
             "idade_minima": idade_minima,
             "exames_por_dia": exames_por_dia,
             "observacoes": observacoes.strip(),
+            "agenda": agenda or [],
         }).eq("id", medico_id).execute()
     except Exception as e:
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
