@@ -1,3 +1,5 @@
+import time
+
 import streamlit as st
 
 # Título principal da página limpa
@@ -23,8 +25,12 @@ with col2:
 
             if senha_correta is None:
                 st.error("Senha de acesso não configurada nos secrets do app (seção [auth]).")
-            elif senha == senha_correta:
-                st.session_state["autenticado"] = True
-                st.rerun()
             else:
-                st.error("Senha incorreta. Tente novamente.")
+                with st.spinner("Verificando credenciais..."):
+                    time.sleep(1)  # simula o carregamento da autenticação
+
+                if senha == senha_correta:
+                    st.session_state["autenticado"] = True
+                    st.rerun()
+                else:
+                    st.error("Senha incorreta. Tente novamente.")
