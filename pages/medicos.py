@@ -15,12 +15,15 @@ def modal_medico(medico: dict | None = None):
     nome = st.text_input("Nome", value=medico["nome"] if medico else "")
 
     agenda_atual = [d for d in (medico["agenda"] if medico else []) if d in DIAS_SEMANA]
-    agenda = st.pills(
+    agenda_selecionada = st.pills(
         "Agenda",
         options=DIAS_SEMANA,
         default=agenda_atual,
         selection_mode="multi",
     )
+    # st.pills retorna os itens na ordem em que foram clicados, não na ordem
+    # das opções — reordena para Seg..Sáb antes de salvar/exibir.
+    agenda = [d for d in DIAS_SEMANA if d in agenda_selecionada]
 
     local_atendimento = st.text_input(
         "Local de atendimento",
