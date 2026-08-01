@@ -298,3 +298,127 @@ def remove_medico(medico_id: int):
     _mapa_medicos_por_exame.clear()
     count_stats.clear()
     return True, None
+
+
+# ── Fluxos de trabalho ───────────────────────────────────────────────────────
+
+@st.cache_data(ttl=300)
+def get_fluxos() -> list[dict]:
+    """Retorna todos os fluxos de trabalho cadastrados, ordenados por nome."""
+    sb = get_client()
+    resp = sb.table("fluxos_trabalho").select("id, nome, descricao").order("nome").execute()
+    fluxos = resp.data
+    for f in fluxos:
+        f["descricao"] = f.get("descricao") or ""
+    return fluxos
+
+
+def add_fluxo(nome: str, descricao: str = ""):
+    nome = nome.strip()
+    if not nome:
+        return False, "Nome do fluxo não pode ser vazio."
+    sb = get_client()
+    try:
+        sb.table("fluxos_trabalho").insert({"nome": nome, "descricao": descricao.strip()}).execute()
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return False, f'Já existe um fluxo chamado "{nome}".'
+        return False, f"Erro ao cadastrar fluxo: {e}"
+    get_fluxos.clear()
+    return True, f'Fluxo "{nome}" cadastrado.'
+
+
+def update_fluxo(fluxo_id: int, nome: str, descricao: str = ""):
+    nome = nome.strip()
+    if not nome:
+        return False, "Nome do fluxo não pode ser vazio."
+    sb = get_client()
+    try:
+        sb.table("fluxos_trabalho").update(
+            {"nome": nome, "descricao": descricao.strip()}
+        ).eq("id", fluxo_id).execute()
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return False, f'Já existe um fluxo chamado "{nome}".'
+        return False, f"Erro ao atualizar fluxo: {e}"
+    get_fluxos.clear()
+    get_especialidades.clear()
+    return True, "Fluxo atualizado."
+
+
+def remove_fluxo(fluxo_id: int):
+    """Remove o fluxo; especialidades vinculadas ficam com fluxo_id nulo (ON DELETE SET NULL)."""
+    sb = get_client()
+    try:
+        sb.table("fluxos_trabalho").delete().eq("id", fluxo_id).execute()
+    except Exception as e:
+        return False, f"Erro ao remover fluxo: {e}"
+    get_fluxos.clear()
+    get_especialidades.clear()
+    return True, None
+
+
+# ── Especialidades ───────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=300)
+def get_especialidades(search: str = "") -> list[dict]:
+    """Busca especialidades por nome ou código, já com o fluxo vinculado (se houver)."""
+    sb = get_client()
+    query = sb.table("especialidades").select(
+        "codigo, nome, fluxo_id, fluxos_trabalho(id, nome, descricao)"
+    )
+    if search:
+        termo = search.replace("%", "").replace(",", "")
+        query = query.or_(f"codigo.ilike.%{termo}%,nome.ilike.%{termo}%")
+    resp = query.order("nome").execute()
+
+    especialidades = []
+    for row in resp.data:
+        fluxo = row.get("fluxos_trabalho")
+        especialidades.append({
+            "codigo": row["codigo"],
+            "nome": row["nome"],
+            "fluxo_id": row.get("fluxo_id"),
+            "fluxo_nome": fluxo["nome"] if fluxo else None,
+            "fluxo_descricao": fluxo["descricao"] if fluxo else None,
+        })
+    return especialidades
+
+
+def add_especialidade(codigo: str, nome: str, fluxo_id: int | None = None):
+    codigo = codigo.strip()
+    nome = nome.strip()
+    if not codigo or not nome:
+        return False, "Código e nome são obrigatórios."
+    sb = get_client()
+    try:
+        sb.table("especialidades").insert(
+            {"codigo": codigo, "nome": nome, "fluxo_id": fluxo_id}
+        ).execute()
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return False, f'Já existe uma especialidade com o código "{codigo}".'
+        return False, f"Erro ao cadastrar especialidade: {e}"
+    get_especialidades.clear()
+    return True, f'Especialidade "{nome}" cadastrada.'
+
+
+def save_especialidade_fluxo(codigo: str, fluxo_id: int | None):
+    """Atribui (ou remove, se fluxo_id=None) o fluxo de trabalho de uma especialidade."""
+    sb = get_client()
+    try:
+        sb.table("especialidades").update({"fluxo_id": fluxo_id}).eq("codigo", codigo).execute()
+    except Exception as e:
+        return False, f"Erro ao salvar fluxo da especialidade: {e}"
+    get_especialidades.clear()
+    return True, None
+
+
+def remove_especialidade(codigo: str):
+    sb = get_client()
+    try:
+        sb.table("especialidades").delete().eq("codigo", codigo).execute()
+    except Exception as e:
+        return False, f"Erro ao remover especialidade: {e}"
+    get_especialidades.clear()
+    return True, None

@@ -11,6 +11,9 @@ if "autenticado" not in st.session_state:
 login_page = st.Page("pages/login.py", title="Entrar no Sistema", icon=":material/lock:", url_path="login")
 avisos = st.Page("pages/avisos.py", title="Avisos", icon=":material/campaign:", url_path="avisos", default=True)
 consulta = st.Page("pages/consulta.py", title="Consulta", icon=":material/table_rows:", url_path="consulta")
+especialidades = st.Page(
+    "pages/especialidades.py", title="Especialidades", icon=":material/alt_route:", url_path="especialidades"
+)
 medicos = st.Page("pages/medicos.py", title="Médicos", icon=":material/stethoscope:", url_path="medicos")
 logout_page = st.Page("pages/logout.py", title="Sair do Sistema", icon=":material/logout:", url_path="logout")
 
@@ -22,7 +25,7 @@ if not st.session_state["autenticado"]:
 else:
     # Quando autenticado, passamos uma LISTA de páginas em vez de um dicionário.
     # Isso garante que todos os botões fiquem lado a lado na navbar principal.
-    pg = st.navigation([avisos, consulta, medicos, logout_page], position="top")
+    pg = st.navigation([avisos, consulta, especialidades, medicos, logout_page], position="top")
 
 # 3. Executa o app
 pg.run()
